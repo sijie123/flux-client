@@ -1,5 +1,4 @@
 const createWTClient = require('@wetransfer/js-sdk');
-const config = require('./config.js');
 const fs = require('fs');
 const request = require('request');
 
@@ -14,11 +13,17 @@ function readFile(path) {
   });
 }
 
-async function upload(file, server) {
+function readSecretKey() {
+  let key = fs.readFileSync("/flux/flux-client/secret.txt", "utf8");
+  console.log(key);
+  return key;
+}
+
+async function upload(file, server, hash) {
   // An authorization call is made when you create the client.
   // Keep that in mind to perform this operation
   // in the most suitable part of your code
-  const wtClient = await createWTClient(config.weTransferAPIKey);
+  const wtClient = await createWTClient(readSecretKey());
 
   const content = await readFile(file);
   const transfer = await wtClient.transfer.create({
@@ -31,16 +36,25 @@ async function upload(file, server) {
       }
     ]
   });
-
-  request(server, { id: jobID, url: transfer.url }, (err, res, body) => {
+  fs.writeFileSync("/flux/upload.txt", transfer.url, "utf8");
+  request(server, { id: hash, url: transfer.url }, (err, res, body) => {
     if (err) { return console.log(err); }
     console.log(body);
   });
 }
 
-if (process.argv.length !== 4) {
-  console.error('Expected two arguments!');
+if (process.argv.length !== 5) {
+  console.error('Expected three arguments!');
   process.exit(1);
 }
 
-upload(process.argv[2], process.argv[3]);
+(async () => {
+    try {
+        let res = await upload(process.argv[2], process.argv[3], process.argv[4]);
+        fs.writeFileSync("/flux/uploaddebug.txt", "success" + res, "utf8");
+    } catch (err) {
+      console.log(err, err.stack);
+      fs.writeFileSync("/flux/uploaddebug.txt", "fail" + err, "utf8");
+        // Deal with the fact the chain failed
+    }
+})();
